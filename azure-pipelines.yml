@@ -6,32 +6,39 @@ trigger:
 - master
 
 pool:
-  vmImage: 'windows-latest'
+  vmImage: 'ubuntu-latest'
 
 variables:
   solution: '**/*.sln'
   buildPlatform: 'Any CPU'
   buildConfiguration: 'Release'
+  
 
 steps:
-- task: NuGetToolInstaller@1
+- script: |
+    dotnet restore
+    dotnet build --configuration Release
 
-- task: NuGetCommand@2
+- task: DotNetCoreCLI@2
+  condition: and(succeeded(), eq(variables.isMain, true))
   inputs:
-    restoreSolution: '$(solution)'
+    command: publish
+    arguments: '--configuration Release --output publish_output'
+    projects: 'Company.Frontend/Company.Frontend.csproj'
+    publishWebProjects: false
+    modifyOutputPath: false
+    zipAfterPublish: false
+    
+- task: ArchiveFiles@2
+  displayName: "Archive files"
+  condition: and(succeeded(), eq(variables.isMain, true))
+  inputs:
+    rootFolderOrFile: "$(System.DefaultWorkingDirectory)/publish_output"
+    includeRootFolder: false
+    archiveFile: "$(System.DefaultWorkingDirectory)/build$(Build.BuildId).zip"
 
-- task: VSBuild@1
+- task: AzureWebApp@1
   inputs:
-    solution: '$(solution)'
-    msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:DesktopBuildPackageLocation="$(build.artifactStagingDirectory)\WebApp.zip" /p:DeployIisAppPath="Default Web Site"'
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
-
-# ASP.NET Core (.NET Framework)
-- task: AzureRmWebAppDeployment@4
-  inputs:
-    ConnectionType: 'AzureRM'
     appType: 'webAppLinux'
-    WebAppName: 'jasoncpapp'
-    packageForLinux: '$(System.DefaultWorkingDirectory)/**/*.zip'
-
+    appName: 'jasonlinux'
+    package: '$(System.DefaultWorkingDirectory)/**/*.zip'
